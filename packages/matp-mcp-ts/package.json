@@ -1,0 +1,34 @@
+{
+  "name": "matp-mcp",
+  "version": "0.1.0",
+  "description": "Memory-Augmented Tool Policy Learning MCP server. Indexes tool-execution trajectories and injects ranked tool-policy recommendations + parameter auto-correction hints before the agentic LLM issues a tool call.",
+  "type": "module",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "matp-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx src/smoke.ts",
+    "test:client": "tsx src/test-client.ts",
+    "verify": "npm run build && npm run smoke && npm run test:client",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

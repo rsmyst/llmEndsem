@@ -1,0 +1,510 @@
+\documentclass[aspectratio=169,10pt]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{default}
+
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{xcolor}
+
+\definecolor{nitkblue}{RGB}{18,52,102}
+\definecolor{muted}{RGB}{90,100,115}
+\definecolor{warn}{RGB}{180,60,40}
+\definecolor{successgreen}{RGB}{46,125,50}
+
+\setbeamercolor{palette primary}{bg=nitkblue,fg=white}
+\setbeamercolor{structure}{fg=nitkblue}
+\setbeamercolor{block title}{bg=nitkblue,fg=white}
+\setbeamercolor{block body}{bg=nitkblue!6,fg=black}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamertemplate{itemize item}[circle]
+
+\title[MATP Midsem]{MATP: Memory-Augmented Tool Policy for Agentic LLMs}
+\subtitle{Temporal State Versioning $\cdot$ Background Abstraction $\cdot$ Predictive Pre-fetching}
+\author[MATP Team]{Rahul Saravanan (Contrib 1) \and \textbf{Shishir Hegde (Contrib 2)} \and Ashab Muhammed (Contrib 3)}
+\institute[NITK]{Department of Information Technology \\ National Institute of Technology Karnataka, Surathkal}
+\date{Mid-Semester Evaluation, October 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{System Architecture: Three Cohesive Contributions}
+  \begin{block}{The MATP Pipeline}
+    A modular, end-to-end context management and tool policy pipeline for long-horizon agents:
+  \end{block}
+  \vspace{0.3em}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.32\textwidth}
+      \begin{block}{\small 1. Background Abstraction}
+        {\footnotesize \textbf{Shishir Hegde (Contrib 2)}}
+        \begin{itemize}
+          \scriptsize
+          \item Intercepts raw tool outputs $O_{\mathrm{raw}}$.
+          \item Distills into compact tuples $G$ and $(S,R,O)$ triples.
+          \item Zero-dependency subword vector store and episodic graph.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{\small 2. Versioning Filter}
+        {\footnotesize \textbf{Rahul Saravanan (Contrib 1)}}
+        \begin{itemize}
+          \scriptsize
+          \item Logical clock $t$ tracking discrete causal mutations.
+          \item Piecewise $R=0$ superseding of stale lineage.
+          \item Exponential recency decay $e^{-\lambda \Delta t}$.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.32\textwidth}
+      \begin{block}{\small 3. Predictive Tool Router}
+        {\footnotesize \textbf{Ashab Muhammed (Contrib 3)}}
+        \begin{itemize}
+          \scriptsize
+          \item Bayesian success ranking $p(\mathrm{tool}|\mathrm{goal})$.
+          \item Parameter auto-correction hints.
+          \item Pre-fetches high-confidence tools before deliberation.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{The long horizon problem}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      \begin{block}{What breaks today}
+        \begin{itemize}
+          \item Agent keeps 10 to 30 tool outputs in context. FIFO eviction drops early, critical state and causes catastrophic forgetting.
+          \item Naive RAG keeps everything but has no notion of mutation. A query still matches schema v1 on keyword overlap and causes stale state hallucination.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{block}{What we need}
+        \begin{itemize}
+          \item Keep all history, but retrieve only the current version of each resource.
+          \item No token bloat, no external service, no network.
+        \end{itemize}
+      \end{block}
+      \vspace{0.6em}
+      {\small \textbf{Question:} how to retain history without returning superseded state?}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Objectives}
+  \begin{block}{Goal}
+    Replace rigid context pruning with a persistent, queryable semantic memory buffer exposed as an MCP server.
+  \end{block}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Dual memory}
+        \begin{itemize}
+          \item Working memory: small active context for reasoning.
+          \item Long term buffer: keeps every version, tagged by resource id and logical clock.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Operations}
+        \begin{itemize}
+          \item Ingest: tag, embed, version, mark prior version superseded.
+          \item Retrieve: score with $R(q,v_i)$, filter stale, decay by age.
+          \item Audit: full history per resource.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Scoring: $R(q,v_i)$}
+  \begin{block}{State aware retrieval}
+    Let $q$ be the query embedding, $v_i$ a stored state, $t_{\mathrm{curr}}$ the logical clock, $t_i$ the birth step of $v_i$:
+    \[
+      R(q,v_i)=
+      \begin{cases}
+        0 & \text{if }\exists j: \text{id}_j=\text{id}_i \land t_j>t_i\\[2pt]
+        \cos(q,v_i)\,\cdot e^{-\lambda\,(t_{\mathrm{curr}}-t_i)} & \text{otherwise}
+      \end{cases}
+    \]
+  \end{block}
+  \vspace{0.3em}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.33\textwidth}
+      \textbf{1. Logical clock $t$}\\[1pt]
+      {\footnotesize Discrete causal steps, not wall time. Each ingest increments the clock.}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \textbf{2. Superseding $R=0$}\\[1pt]
+      {\footnotesize If a newer version of the same resource exists, the older is zeroed when filtering is enabled.}
+    \end{column}
+    \begin{column}{0.33\textwidth}
+      \textbf{3. Decay $e^{-\lambda\Delta t}$}\\[1pt]
+      {\footnotesize Among active states, recent steps outrank old ones. Default $\lambda=0.05$.}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Benchmark: schema refactor ($t=1$ to $16$)}
+  {\footnotesize Setup: agent ingests db/schema.sql v1, configs, src/models/user.py v1 which depends on schema v1, then schema v2 and auth v2. Clock advanced to $t_{\mathrm{curr}}=16$. Query mentions both password hash from v1 and oauth from v2 so lexical overlap favours stale text.}
+
+  \vspace{0.4em}
+  \begin{table}
+    \centering
+    \footnotesize
+    \begin{tabular}{lccc}
+      \toprule
+      Method & Lineage stale in top $k$ & Effective precision & Retention\\
+      \midrule
+      FIFO (drop old turns) & & 0\% (forgotten) & 0\%\\
+      Naive RAG (cosine only, $k=5$) & 1/5 = 20\% & 3/5 = 60\% & 100\%\\
+      \textbf{MATP (this work, $k=4$, $\lambda=0.05$)} & \textbf{0/4 = 0\%} & \textbf{3/4 = 75\%} & \textbf{100\%}\\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      {\footnotesize \textbf{What the numbers mean}}
+      \begin{itemize}
+        \footnotesize
+        \item MATP eliminates direct lineage stale: schema v1 is $R=0$ and never returned.
+        \item Dependent leak remains: src/models/user.py v1 still scores $R\approx0.38$ because its resource id differs. So 1/4 is effectively stale.
+        \item Naive also surfaces that ORM file, so 2/5 are effectively stale if counting semantic staleness.
+      \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      {\footnotesize \textbf{Decay sweep} (query: configuration parameters)}
+      \begin{itemize}
+        \footnotesize
+        \item $\lambda=0.00$: $R=\cos$ only, older configs tie.
+        \item $\lambda=0.05$: recent auth v2 outranks older by factor 0.61.
+        \item $\lambda=0.20$: strong recency, top score factor 0.14 for tight horizons.
+      \end{itemize}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Status and next steps}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Done (midsem)}
+        \begin{itemize}
+          \item Grounded $R(q,v_i)$ with clock, superseding and decay.
+          \item Persistent buffer with lineage audit.
+          \item MCP server over stdio with local embeddings.
+          \item 0\% lineage stale on direct versioning. Dependent leak documented.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Endsem plan}
+        \begin{itemize}
+          \item Cross resource dependency graph: propagate invalidation beyond exact resource id so dependents of a superseded state are also suppressed.
+          \item Adaptive temporal decay: learn $\lambda$ per task and subgoal horizon instead of a fixed constant.
+          \item Broader evaluation on longer horizon workloads with overlapping mutations.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =========================================================================
+% CONTRIBUTION 2 SLIDES (Shishir Hegde): Background Abstraction & Trajectory Synthesis
+% =========================================================================
+
+\begin{frame}{Contribution 2: Background Abstraction Engine (Shishir Hegde)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{The Bloat and Noise Bottleneck}
+        \begin{itemize}
+          \footnotesize
+          \item Raw tool outputs $O_{\mathrm{raw}}$ (SQL JSON dumps, 100-line stack traces, API payloads, CLI logs) have \textbf{low Signal-to-Noise Ratio (SNR)}.
+          \item Storing raw text causes rapid context overflow, token bloat, and noise dilution during semantic retrieval.
+        \end{itemize}
+      \end{block}
+      \begin{block}{Mathematical Formulation}
+        \footnotesize
+        Extract core state facts into structured tuple:
+        \[
+          G = (g,\, t,\, p,\, s,\, \sigma,\, \text{parent})
+        \]
+        \[
+          \mathcal{T} = \{(S_i, R_i, O_i)\} \quad \Longrightarrow \quad \mathrm{Size}(G) \ll \mathrm{Size}(O_{\mathrm{raw}})
+        \]
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Architecture and Execution Hook}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{Non-Blocking Ingest:} Hooks directly into post-tool execution loop via \texttt{matp\_index\_trajectory}.
+          \item \textbf{Deterministic Vectorization:} Subword $n$-gram hash embedder with term frequency saturation (zero-infra, CPU-local).
+          \item \textbf{Episodic Triples Extraction:} Extracts $(S, R, O)$ facts and entity mentions at ingestion.
+          \item \textbf{SQLite Durability:} WAL-backed store replaces per-index JSON rewrites; legacy JSON imported once.
+          \item \textbf{Causal DAG + Macros:} Soft validity labels and reusable 10-step composite skills.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Contribution 2: Deliverable Objectives \& Scope}
+  \begin{block}{Problem Statement Decomposition}
+    Extract actionable execution knowledge from verbose tool streams without token bloat, noise dilution, or deliberation latency overhead.
+  \end{block}
+  \vspace{0.3em}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Objective 1 (Completed at Midsem)}
+        \textbf{Atomic Abstraction, Buffer, and Graph Base}
+        \begin{itemize}
+          \footnotesize
+          \item Built domain-specific synthesis for SQL, tracebacks, REST APIs, bash/git/pytest, and documents.
+          \item Implemented deterministic subword embedder and local vector buffer.
+          \item Synthesized episodic Knowledge Graph with $(S, R, O)$ triples and causal parent tracking.
+          \item Implemented hybrid dense-sparse semantic retrieval.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Objective 2 (Completed at Endsem)}
+        \textbf{Causal DAG, Macros, Worker, Benchmarks}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{Cross-Session Causal DAG:} soft \textit{fresh / stale / suspect / superseded} labels, scope isolation, healing, overrides.
+          \item \textbf{Hierarchical Macro Distillation:} canonical signatures, slot binding, support/success promotion and demotion.
+          \item \textbf{Async Neural Worker:} durable SQLite job queue + local Ollama/Qwen-2.5 with JSON-schema output.
+          \item \textbf{Benchmarks:} DAG replay, held-out macro replay, queue overhead, SWE-style and GAIA-style local harnesses.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Benchmark: Token Compression and Context Sustainability}
+  {\footnotesize Benchmark: 30 sequential agent tool calls across 5 heterogeneous modalities. Evaluated token footprint, compression ratio, and cumulative context growth over a 30-turn execution horizon.}
+
+  \vspace{0.3em}
+  \begin{table}
+    \centering
+    \footnotesize
+    \begin{tabular}{lcccc}
+      \toprule
+      Tool Domain & Raw $O_{\mathrm{raw}}$ (Tokens) & Distilled $G$ (Tokens) & Compression Ratio & Factor\\
+      \midrule
+      SQL Database & 3,441 & 234 & \textbf{93.2\%} & 14.7$\times$\\
+      Runtime Traceback & 1,808 & 107 & \textbf{94.1\%} & 16.9$\times$\\
+      REST API Response & 1,416 & 178 & \textbf{87.4\%} & 8.0$\times$\\
+      File System / Bash & 2,185 & 131 & \textbf{94.0\%} & 16.7$\times$\\
+      Doc / PDF Parsing & 1,337 & 104 & \textbf{92.2\%} & 12.9$\times$\\
+      \midrule
+      \textbf{Overall (30 turns)} & \textbf{61,122 total} & \textbf{4,524 total} & \textbf{92.6\%} & \textbf{13.5$\times$ Reduction}\\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Context Growth (30 Turns)}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{Unpruned Raw Context:} Reaches \textbf{61,122 tokens} (7.5$\times$ an 8k window; severe cost).
+          \item \textbf{MATP Buffer:} Retains full 30-turn history in \textbf{4,524 tokens}, fitting an 8k budget.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Catastrophic Forgetting Avoidance}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{FIFO(3) Context:} Keeps $\sim$\,4,900 tokens but \textbf{drops 90\% of prior steps}, forgetting early schemas and fixes.
+          \item \textbf{MATP:} Maintains 100\% complete trajectory history with zero pruning loss.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Benchmark: Hybrid Retrieval Precision and Latency}
+  {\footnotesize Query Suite: 10 targeted intent queries testing entity extraction, error diagnosis, and schema recall against the 30-turn trajectory store. Evaluated hybrid retrieval scoring vs Naive Raw Text Vector Store.}
+
+  \vspace{0.3em}
+  \begin{table}
+    \centering
+    \footnotesize
+    \begin{tabular}{lcccc}
+      \toprule
+      Memory Architecture & Strict P@1 & Domain P@1 & Key Fact Retention & Latency ($N=30$)\\
+      \midrule
+      Naive Raw Log Store & 20.0\% & 60.0\% & 37.3\% & 1.48 ms\\
+      \textbf{MATP Distilled Buffer (Ours)} & \textbf{50.0\%} & \textbf{100.0\%} & \textbf{88.0\%} & 4.68 ms (zero network)\\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Hybrid Dense-Sparse Scoring}
+        \begin{itemize}
+          \footnotesize
+          \item Combines dense subword cosine with sparse entity matching:
+            \[
+              S(q, v_i) = \alpha \cos(q, v_i) + (1-\alpha) \mathrm{Overlap}(q, G_i)
+            \]
+          \item Supports exact \texttt{filter\_tool} and \texttt{filter\_entity} constraints.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Signal-to-Noise Enhancement}
+        \begin{itemize}
+          \footnotesize
+          \item Filters 87.4\% -- 94.1\% low-SNR boilerplate (headers, stack frames, OCR noise).
+          \item Strict P@3 rises from 60\% to 80\%; policy weights suppress stale rows.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Episodic Relational Graph \& Working-Memory MCP Protocol}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Episodic Knowledge Graph Synthesis}
+        \begin{itemize}
+          \footnotesize
+          \item Extracts $(S, R, O)$ triples per step:
+            \begin{itemize}
+              \scriptsize
+              \item $(\texttt{users}, \texttt{has\_column}, \texttt{email})$
+              \item $(\texttt{migrate.py}, \texttt{failed\_with}, \texttt{OperationalError})$
+              \item $(\texttt{pytest}, \texttt{tests\_passed}, 12)$
+            \end{itemize}
+          \item 30-turn run: \textbf{90 triples over 26 entities}; hubs are \texttt{users} (deg 30) and \texttt{config/auth\_v2.yaml} (deg 24).
+          \item \textbf{Causal Step Tracking:} \texttt{parent\_step\_id} links remediation actions to preceding errors.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{MCP Server: 16 Tools}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{Core (4):} index, query, inspect graph, context summary.
+          \item \textbf{DAG (4):} lineage, resource query, confirm state, recompute validity.
+          \item \textbf{Macros (5):} list, match, expand, mine, record use.
+          \item \textbf{Ops (3):} worker status, enqueue digest, stats.
+          \item \textbf{Coverage:} 45 pytest tests, including real stdio subprocess tests.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Causal DAG, Macro Distillation \& Async Worker}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Cross-Session Causal DAG}
+        \begin{itemize}
+          \footnotesize
+          \item Tracks read / write / delete access per canonical resource (file, table, API, git, shell).
+          \item Soft validity: \textit{fresh}, \textit{stale}, \textit{suspect}, \textit{superseded}; weights $1$, $0.5\tau$, $\tau$, $0$.
+          \item Transitive taint with per-hop decay $\gamma = 0.8$; scope-isolated workspaces.
+          \item Healing on re-execution and manual overrides.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+      \begin{block}{Macros and Background Worker}
+        \begin{itemize}
+          \footnotesize
+          \item 10-step windows $\rightarrow$ canonical signatures $\rightarrow$ \texttt{difflib} clusters.
+          \item Slot parameterisation; promote at support $\geq 3$, success $\geq 0.8$; demote after 3 failures.
+          \item Durable SQLite job queue; lease recovery, retry, idempotency.
+          \item Local Ollama \texttt{/api/chat} with JSON-schema output; indexing only enqueues.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+\begin{frame}{Benchmark: Replay and Cross-Session Transfer}
+  \begin{table}
+    \centering
+    \footnotesize
+    \begin{tabular}{lcc}
+      \toprule
+      Evaluation & Baseline & MATP\\
+      \midrule
+      DAG validity labels (24 nodes, 9 scenarios) & --- & \textbf{24/24 = 100\%}\\
+      Held-out macro tool sequence (2 routines) & --- & \textbf{100\%}\\
+      Held-out macro slot binding & --- & \textbf{100\%}\\
+      Index latency, queue off / on & 4.96 ms & 5.22 ms\\
+      \midrule
+      \texttt{mini\_swe}: 10 unseen repairs (scripted) & 20\% solved & \textbf{100\% solved}\\
+      \quad repair-rule retrieval & --- & \textbf{100\%}\\
+      \texttt{gaia\_lite}: 6 multi-hop questions & 83.3\% & \textbf{100\%}\\
+      \quad answers using a superseded fact & 1/2 & \textbf{0/2}\\
+      \bottomrule
+    \end{tabular}
+  \end{table}
+  \vspace{0.2em}
+  {\scriptsize Controlled local analogues with known ground truth, \textbf{not} official SWE-bench or GAIA scores. All numbers are measured by \texttt{benchmarks/run\_all.py}.}
+\end{frame}
+
+\begin{frame}{Status: Endsem Deliverables (Contribution 2)}
+  \begin{columns}[T,onlytextwidth]
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Completed}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{Multi-Domain Abstraction:} $(g, t, p, s, \sigma)$ across SQL, tracebacks, APIs, bash, docs.
+          \item \textbf{SQLite Store:} WAL durability, one-time legacy JSON migration.
+          \item \textbf{Hybrid Search:} dense subword + entity matching, tool/entity/status filters.
+          \item \textbf{Causal DAG:} 24/24 replay labels, scope isolation, healing, overrides.
+          \item \textbf{Macros:} 100\% held-out sequence and binding accuracy.
+          \item \textbf{Async Worker:} durable queue, retry, idempotency, revision guard.
+          \item \textbf{16 MCP Tools:} 45 tests, including real stdio subprocesses.
+        \end{itemize}
+      \end{block}
+    \end{column}
+    \begin{column}{0.49\textwidth}
+      \begin{block}{Measured Results and Limits}
+        \begin{itemize}
+          \footnotesize
+          \item \textbf{92.6\% compression} (13.5$\times$), full 30-turn history in 4,524 tokens.
+          \item \textbf{88.0\% fact retention} at equal budget vs 37.3\% raw.
+          \item \textbf{100\% domain P@1}, strict P@1 50\% vs 20\%.
+          \item \textbf{Limits:} offline evaluation; unsupported gated GAIA / Docker SWE-bench; macro matching uses a hashed embedder + lexical prior; live Qwen2.5 worker quality not measured; retrieval is $O(N)$.
+        \end{itemize}
+      \end{block}
+    \end{column}
+  \end{columns}
+\end{frame}
+
+% =========================================================================
+% SLIDE 8: Takeaways and Conclusion
+% =========================================================================
+
+\begin{frame}{Takeaway}
+  \begin{itemize}
+    \item \textbf{Retain without bloat (Contrib 2):} Background abstraction achieves 92.6\% token compression (13.5$\times$), preserving full 30-turn history in 4,524 tokens with 88\% equal-budget fact retention.
+    \item \textbf{Retrieve without stale (Contrib 2):} Causal DAG labels 24/24 replay nodes correctly; stale and superseded rows are down-weighted or excluded.
+    \item \textbf{Reuse without rediscovery (Contrib 2):} Held-out macros replay with 100\% sequence and slot-binding accuracy.
+    \item \textbf{Route with confidence (Contrib 3):} Laplace-smoothed predictive pre-fetching recommends optimal tools and auto-corrects parameters.
+    \item \textbf{Zero external infra:} Local subword vectorizer, SQLite persistence, optional local Ollama worker, and stdio MCP.
+  \end{itemize}
+  \vspace{1.2em}
+  \centering
+  {\Large Thank you}\\[2pt]
+  {\small Questions and discussion}
+\end{frame}
+
+\end{document}
