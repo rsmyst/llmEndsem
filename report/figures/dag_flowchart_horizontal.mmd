@@ -1,11 +1,13 @@
 flowchart LR
-    E["Tool Execution<br/>(tool, params, out)"] --> R["Resource Resolver<br/>Extract Canonical IDs<br/>(db:*, file:*, git:*)"]
-    R --> Mode{"Access<br/>Mode?"}
+    Action["Tool Action<br/>(Resource Access)"] --> Check{"Access<br/>Type?"}
+
+    Check -- "Read" --> Fresh["FRESH State<br/>(Weight = 1.0)"]
+
+    Check -- "Write" --> Mutate["Version Bump<br/>(v_new = v + 1)"]
     
-    Mode -- "read" --> BR["Bind Read to Version v_curr<br/>Status: FRESH (W=1.0)"]
+    Mutate --> Sup["SUPERSEDED<br/>Prior Writers (Weight = 0)"]
+    Mutate --> Stale["STALE<br/>Prior Readers (Attenuated)"]
     
-    Mode -- "write" --> V["Increment Version<br/>v_new = v_curr + 1"]
-    V --> W1["Writers (v < v_new)<br/>SUPERSEDED (W=0.0)"]
-    V --> W2["Readers (v < v_new)<br/>STALE (W=0.5 × taint)"]
-    W1 & W2 --> BFS["BFS Transitive Taint<br/>Consumers: SUSPECT (decayed)"]
-    BFS --> Heal["Truth Maintenance<br/>Re-execution heals path"]
+    Sup & Stale --> BFS["Transitive BFS<br/>Downstream SUSPECT"]
+    
+    BFS -. "Re-execution" .-> Fresh

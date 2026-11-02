@@ -1,60 +1,41 @@
 flowchart TD
-    subgraph Host ["Agentic Host Environment"]
-        LLM["Agent LLM / Host Orchestrator<br/>(Claude / Cursor / Roo Code)"]
+    subgraph Host ["Agent Host"]
+        LLM["Agent LLM / Orchestrator<br/>(Claude / Cursor / Roo Code)"]
     end
 
     subgraph MCP ["Model Context Protocol (MCP) Boundary"]
-        Router["MATP Unified MCP Server<br/>(JSON-RPC stdio)"]
+        Router["MATP Unified MCP Router<br/>(stdio JSON-RPC)"]
     end
 
-    subgraph Ingest ["Ingestion & Distillation Pipeline"]
-        Distill["Background Abstraction Engine<br/>(Fact Extraction & Token Compression)"]
-        ResRes["Resource Canonicalizer<br/>(db:*, file:*, api:*, git:*)"]
-        Embed["Deterministic Local Vectorizer<br/>(Subword n-gram hashing + TF saturation)"]
+    subgraph Ingest ["Ingestion & Distillation"]
+        Distill["Trajectory Distillation<br/>(Fact Extraction & Compression)"]
+        Embed["Deterministic Local Vectorizer<br/>(Subword Embeddings)"]
     end
 
-    subgraph Storage ["Durable Multi-Domain Storage (SQLite)"]
-        DB[("MATP Persistent SQLite Buffer<br/>- Trajectories & Tuples<br/>- Resource Versions & Accesses<br/>- Causal DAG Edges<br/>- Macro Skills & Slots<br/>- Learned Parameter Corrections<br/>- Durable Job Queue")]
+    subgraph Storage ["Durable Storage (SQLite)"]
+        DB[("MATP SQLite Store<br/>- Trajectories & Causal DAG<br/>- Macro Skills & Corrections")]
     end
 
-    subgraph CausalTemporal ["Causal Reasoning & Temporal Retrieval"]
-        DAG["Cross-Session Causal DAG Engine<br/>- Writer Supersession (W = 0)<br/>- Reader Staleness (W = 0.5 × taint)<br/>- Transitive Suspect Propagation"]
-        Temporal["Temporal Decay & Clock<br/>- Logical Discrete Clock (t_curr)<br/>- Exponential Decay exp(-lambda * dt)<br/>- Per-Task Adaptive Lambda Tuner"]
-        Hybrid["Hybrid Scorer<br/>R(q, v) = (alpha*Dense + (1-alpha)*Sparse) × W_DAG × exp(-lambda * dt)"]
+    subgraph CausalTemporal ["Causal Tracking & Temporal Decay"]
+        DAG["Causal DAG Engine<br/>(Supersession & Invalidation)"]
+        Temporal["Temporal Decay Engine<br/>(Logical Clock & Adaptive Lambda)"]
     end
 
-    subgraph MacroPolicy ["Macro Skills & Policy Engine"]
-        Macro["Macro Distillation Miner<br/>- 10-step Window Clustering<br/>- Slot Parameterization<br/>- Hierarchical L2/L3 Skills"]
-        Policy["Tool Recommendation Matrix<br/>- Laplace-smoothed Success Rate<br/>- Bayesian Beta Confidence<br/>- Error-Pattern Auto-Correction Hints"]
+    subgraph MacroPolicy ["Macro Skills & Tool Policy"]
+        Policy["Bayesian Tool Policy<br/>(Rankings & Auto-Fix Hints)"]
+        Macro["Macro Distillation<br/>(Hierarchical Skills)"]
     end
 
-    subgraph AsyncWorker ["Asynchronous Enrichment"]
-        Queue["SQLite Job Queue"]
-        Worker["Async Neural Worker<br/>(Ollama / Qwen2.5 Local)"]
-    end
-
-    LLM <-->|"1. Tool Policy & Parameter Hints"| Router
-    LLM -->|"2. Trajectory Ingest (Tool, Params, Output)"| Router
-    LLM <-->|"3. Temporal & Causal Retrieval"| Router
-    LLM <-->|"4. Macro Skill Matching & Expansion"| Router
-
+    LLM <--> Router
     Router --> Distill
-    Distill --> ResRes
     Distill --> Embed
-    ResRes --> DAG
+    Distill --> DAG
     Embed --> DB
-
-    DAG --> DB
-    Temporal --> DB
-    Hybrid --> DB
+    DAG <--> DB
+    Temporal <--> DB
     Macro <--> DB
     Policy <--> DB
 
-    Distill -.->|"Enqueue Enrichment"| Queue
-    Queue --> Worker
-    Worker -.->|"Update Neural Summary"| DB
-
-    DB --> Hybrid
-    Hybrid --> Router
+    Temporal --> Router
     Policy --> Router
     Macro --> Router

@@ -1,17 +1,14 @@
 flowchart LR
-    subgraph PolicyStream ["Tool Policy & Self-Healing Pipeline"]
-        Subgoal["Agent Sub-Goal Query"] --> KNN["Cosine k-NN over Trajectory Buffer"]
-        KNN --> Group["Group Attempts by Candidate Tool"]
-        Group --> Laplace["Laplace Smoothing:<br/>Rate = (success + 1) / (attempts + 2)"]
-        Laplace --> Bayes["Bayesian Beta Confidence:<br/>Conf = Rate × (n/(n+5)) + 0.5 × (5/(n+5))"]
-        Bayes --> Hints["Match Error Rules:<br/>1. Exact Substring Match (sim = 1.0)<br/>2. Cosine Vector Similarity (sim >= 0.40)"]
-        Hints --> OutputPrompt["Inject into Agent System Prompt:<br/>- Tool Ranking Matrix<br/>- Parameter Fix Hints"]
+    subgraph PolicyStream ["Tool Policy & Self-Healing Loop"]
+        Subgoal["Agent Sub-Goal"] --> KNN["k-NN History Search"]
+        KNN --> Ranking["Bayesian Tool Ranking<br/>(Laplace Beta Posterior)"]
+        Ranking --> Hints["Auto-Correction Hints<br/>(Schema Error Fixes)"]
+        Hints --> Output["Prompt Injection<br/>(Rankings & Hints)"]
     end
 
-    subgraph MacroStream ["Macro Action Distillation Pipeline"]
-        Session["Agent Execution Stream"] --> Window["Sliding 10-Step Action Windows"]
-        Window --> Canonicalize["Canonicalize Signatures:<br/>sigma(a) = (tool, params_shape, status)"]
-        Canonicalize --> Matcher["SequenceMatcher Clustering:<br/>Token-Levenshtein / LCS"]
-        Matcher --> Slotting["Slot Variable Parameterization:<br/>Literal variance to arg slots"]
-        Slotting --> Promote["Skill Promotion:<br/>Support >= 3, Success >= 80%<br/>Stored as Composite Macro"]
+    subgraph MacroStream ["Macro Action Distillation"]
+        Stream["Action Stream"] --> Window["Sliding Window<br/>(10 Steps)"]
+        Window --> Cluster["Sequence Clustering<br/>(Signature Matching)"]
+        Cluster --> Slot["Slot Parameterization<br/>(Variable Abstraction)"]
+        Slot --> Skill["Reusable Macro Skill<br/>(Composite Routine)"]
     end

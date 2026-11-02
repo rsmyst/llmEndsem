@@ -18,9 +18,9 @@
 
 \title{MATP: A Unified Memory-Augmented Tool Policy Framework with Causal State Invalidation, Temporal Decay, and Macro Distillation for Long-Horizon Autonomous Agents}
 
-\author{Rahul~Saravanan,
-        Shishir~Hegde,
-        and~Ashab~Muhammed%
+\author{Rahul~Saravanan(231IT054),
+        Shishir~Hegde(231IT067),
+        and~Ashab~Muhammed(231IT011)%
 \IEEEcompsocitemizethanks{
 \IEEEcompsocthanksitem R. Saravanan, S. Hegde, and A. Muhammed are with the Department of Information Technology, National Institute of Technology Karnataka (NITK), Surathkal, Mangalore 575025, India.\protect\\
 E-mails: rahul.skyscc@gmail.com, shishirsh2005@gmail.com, ashabcode@gmail.com.
@@ -100,15 +100,17 @@ Unlike distributed memory systems requiring external vector databases (e.g., Pin
 \label{sec:causal_retrieval}
 
 \subsection{Mathematical Formulation of Piecewise Scoring}
-Let $q$ denote the user or sub-goal query embedding vector, and let $v_i$ represent a stored state trajectory node born at discrete logical clock step $t_i$. Let $t_{\text{curr}}$ be the current logical clock of the agent session. The piecewise retrieval score $R(q, v_i)$ is formulated as:
+Let $q$ denote the user or sub-goal query embedding vector, and let $v_i$ represent a stored state trajectory node born at discrete logical clock step $t_i$. Let $t_{\text{curr}}$ be the current logical clock of the agent session. The piecewise retrieval score $R(q, v_i)$ suppresses superseded or invalid states and applies temporal decay to active nodes:
 
 \begin{equation}
 \label{eq:piecewise_scoring}
 R(q, v_i) = 
 \begin{cases} 
-0, & \text{if } v_i \text{ is superseded}, \\
-0, & \text{if } v_i \text{ is transitively invalid}, \\
-S(q, v_i) W_{\text{DAG}}(v_i) e^{-\lambda(t_{\text{curr}} - t_i)}, & \text{otherwise}.
+0, & \text{if } v_i \text{ is invalid}, \\
+\begin{aligned}[b]
+& S(q, v_i) W_{\text{DAG}}(v_i) \\
+& \quad \times e^{-\lambda(t_{\text{curr}} - t_i)},
+\end{aligned} & \text{otherwise}.
 \end{cases}
 \end{equation}
 
@@ -228,7 +230,7 @@ As presented in Figure~\ref{fig:metric_retrieval} and Table~\ref{tab:long_horizo
 \caption{Long-Horizon Retrieval Comparison Across 40 Logical Steps}
 \label{tab:long_horizon}
 \centering
-\setlength{\tabcolsep}{3.5pt}
+\setlength{\tabcolsep}{2.6pt}
 \begin{tabular}{lcccc}
 \toprule
 \textbf{Strategy} & \textbf{Returned} & \textbf{Lineage-Stale} & \textbf{Dep-Invalid} & \textbf{Active (\%)} \\

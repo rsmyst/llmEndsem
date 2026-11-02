@@ -1,15 +1,14 @@
 flowchart TD
-    Start(["Tool Execution Finished: tool, params, raw_output"]) --> Extract["Resource Resolver:<br/>Extract Canonical Accesses (db:*, file:*, api:*, git:*)"]
-    Extract --> CheckMode{"Access Mode?"}
+    Start(["Tool Execution"]) --> Extract["Resource Access<br/>(db, file, api, git)"]
+    Extract --> Check{"Access Type?"}
 
-    CheckMode -- "read" --> BindRead["Bind Access to Current Resource Version v_curr<br/>Record Read Access in Access Table"]
-    BindRead --> Done(["Done: Node Marked Fresh (taint = 1.0)"])
+    Check -- "Read" --> BindRead["Bind to Version v_curr<br/>Status: FRESH (W = 1.0)"]
+    BindRead --> Done(["Done: Fresh State"])
 
-    CheckMode -- "write / delete" --> Incr["Increment Version:<br/>v_new = v_curr + 1<br/>Update Resource Record"]
-    Incr --> Super["Find Prior Writers (v < v_new):<br/>Mark SUPERSEDED (W = 0.0, taint = 0.0)<br/>Add SUPERSEDES edge in DAG"]
-    Super --> Stale["Find Prior Readers (v_access < v_new):<br/>Mark STALE (W = 0.5 × taint)<br/>Add INVALIDATES edge in DAG"]
-    Stale --> Seed["Collect Seed Invalidation Nodes<br/>(Super + Stale Nodes)"]
+    Check -- "Write" --> Incr["Increment Version<br/>v_new = v_curr + 1"]
+    Incr --> Super["Prior Writers<br/>Mark SUPERSEDED (W = 0.0)"]
+    Incr --> Stale["Prior Readers<br/>Mark STALE (Attenuated)"]
 
-    Seed --> BFS["BFS Propagation along DEPENDS_ON Edges:<br/>For each consumer node C:<br/>taint_C = taint_parent × gamma<br/>If taint_C >= floor: Mark SUSPECT"]
-    BFS --> Truth["Truth Maintenance / Recompute:<br/>Re-execution of node resets taint = 1.0 and heals valid path"]
+    Super & Stale --> BFS["Transitive BFS Propagation<br/>Mark Consumers SUSPECT"]
+    BFS --> Truth["Truth Maintenance<br/>Re-execution Heals Path"]
     Truth --> Done

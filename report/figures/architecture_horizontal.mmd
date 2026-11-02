@@ -1,32 +1,30 @@
 flowchart LR
-    subgraph S1 ["1. Host & Router Layer"]
-        Host["Host Agent<br/>(Claude / Cursor / Roo)"]
-        Router["MATP MCP Router<br/>(stdio JSON-RPC)"]
-        Host <-->|"Tool Calls / Output"| Router
+    subgraph S1 ["1. Agent & MCP Router"]
+        Host["Agent Host<br/>(LLM Client)"]
+        Router["MCP Router<br/>(stdio JSON-RPC)"]
+        Host <-->|"Tool Calls & Feedback"| Router
     end
 
-    subgraph S2 ["2. Ingestion & Distillation"]
-        Distill["Distillation Engine<br/>(Tuple & Fact Triples)"]
-        ResRes["Resource Resolver<br/>(db, file, api, git)"]
-        Embed["Local Subword<br/>Vectorizer (n-grams)"]
+    subgraph S2 ["2. Ingest & Distillation"]
+        Distill["Trajectory Distiller<br/>(Fact Triples)"]
+        Embed["Local Vectorizer<br/>(Subword Embeddings)"]
         Router --> Distill
-        Distill --> ResRes
         Distill --> Embed
     end
 
-    subgraph S3 ["3. Causal Storage & Invalidation (SQLite)"]
-        DAG["Causal DAG Engine<br/>- Supersede writers (W=0)<br/>- Stale readers (W=0.5t)<br/>- BFS suspect propagate"]
-        DB[("Persistent SQLite<br/>- Trajectories & DAG<br/>- Macros & Corrections")]
-        ResRes --> DAG
+    subgraph S3 ["3. Causal Storage (SQLite)"]
+        DAG["Causal DAG Engine<br/>(State Invalidation)"]
+        DB[("SQLite Storage<br/>(ACID Durability)")]
+        Distill --> DAG
         DAG <--> DB
         Embed --> DB
     end
 
-    subgraph S4 ["4. Temporal Retrieval & Guidance"]
-        Retrieval["Hybrid Temporal Engine<br/>R(q,v) = Hybrid × W_DAG × exp(-λΔt)"]
-        Policy["Policy & Macro Engine<br/>- Laplace Tool Matrix<br/>- Parameter Error Hints<br/>- L2/L3 Macro Skills"]
+    subgraph S4 ["4. Retrieval & Policy"]
+        Retrieval["Temporal Retrieval<br/>(Decay & Invalidation Filter)"]
+        Policy["Tool Policy & Macros<br/>(Rankings & Auto-Fix)"]
         DB --> Retrieval
-        DB <--> Policy
-        Retrieval -->|"Filtered Context"| Router
-        Policy -->|"Prompt Guidance"| Router
+        DB --> Policy
+        Retrieval -->|"Active Context"| Router
+        Policy -->|"Policy Guidance"| Router
     end
